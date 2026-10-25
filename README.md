@@ -2,8 +2,8 @@
 
 Your phone becomes a trackpad, keyboard and remote for your Mac. Lie back,
 hold the phone in one hand, and drive the Mac from across the room. It runs
-in the phone's browser, so there's no App Store app, and nothing ever leaves
-your Wi-Fi: no cloud, no account.
+in the phone's browser, iPhone or Android, so there's no app to install from
+a store, and nothing ever leaves your Wi-Fi: no cloud, no account.
 
 | Trackpad | Sideways: a Magic Trackpad | Keys | Remote |
 | :---: | :---: | :---: | :---: |
@@ -59,15 +59,41 @@ page with a QR code. `start.sh` also keeps the Mac awake while Rackpad runs.
    Rackpad from (Terminal, iTerm, Ghostty, VS Code…) in System Settings →
    Privacy & Security → Accessibility. No app can move the pointer or type
    without it.
-2. **Scan the QR code** with the phone's camera and open the link. Already
-   have Rackpad on the phone? Open it and tap **Scan QR code** instead.
-3. **Add it to the Home Screen** (Share → Add to Home Screen). It then opens
-   full screen with no browser bars and finds your Mac by itself.
+2. **Scan the QR code** with the phone's camera (or Google Lens) and open the
+   link. Already have Rackpad on the phone? Open it and tap **Scan QR code**
+   instead.
+3. **Add it to the Home Screen.** iPhone: Share → Add to Home Screen. Android:
+   Chrome's ⋮ → Add to Home screen. It then finds your Mac by itself.
 
 The pairing page lives at <http://localhost:8421/pair>. The QR code points at
 your Mac's `.local` name, which works on any network your phone and Mac
 share. Some office networks block `.local` names, so the page lists the plain
 IP address too.
+
+### On Android
+
+Everything works in Chrome on Android: the trackpad, typing, the wheel, the
+app controls and the live screen. A few things are different there:
+
+- **Full screen at the first touch.** Chrome can hide its own bars and the
+  system's, which an iPhone can't, but only when a touch asks. So your first
+  touch takes Rackpad full screen (Settings → **Full screen** turns it off).
+- **The back gesture doesn't throw you out.** Android's back is a swipe in
+  from either edge, right where your thumb lands on the trackpad. In Rackpad,
+  back closes an open sheet, puts the keyboard away or returns to the
+  trackpad; from the trackpad it says "Swipe back again to leave".
+- **Typing is live, letter by letter.** Gboard and Samsung Keyboard hold each
+  word as an underlined composition until the space. Rackpad mirrors the
+  composition as you type, so letters reach the Mac as you press them, and
+  the keyboard's correction at the space fixes the word on the Mac too.
+- **`.local` names.** Android finds `Your-Mac.local` from Android 12 on, but
+  not over a VPN or mobile data. If the QR link doesn't open, the pairing
+  page has a second code with the Mac's plain address. Scan that one again if
+  the Mac's address changes.
+- **Installing.** On plain HTTP, Add to Home screen makes an icon that opens
+  in Chrome (and goes full screen at the first touch). With the secure
+  connection, Chrome installs Rackpad as an app with no browser at all, and
+  tells your Mac the phone's model.
 
 ### Secure connection (once per phone)
 
@@ -84,6 +110,13 @@ follow the steps:
    **Rackpad Local CA**.
 4. Back in Rackpad: **Open secure Rackpad**, then add that one to the Home
    Screen and delete the old icon.
+
+On Android, Chrome saves the certificate to Downloads. In Settings, search
+for **CA certificate** → CA certificate → Install anyway → pick
+`Rackpad.crt`. Then **Open secure Rackpad** and install it from Chrome's ⋮
+menu. Android then shows "Network may be monitored": that's the warning it
+shows for any certificate authority you add yourself, and this one can only
+vouch for local names.
 
 The certificate is made on your Mac and its key never leaves it
 (`~/.rackpad/tls`). It is restricted to `.local` names, `localhost` and
@@ -211,7 +244,9 @@ npm test        # unit tests, plus browser end-to-end tests if Playwright is ins
 ```
 
 The end-to-end tests drive the real phone page in Chromium with real touch
-events, over HTTP and HTTPS, against a dry-run Mac. Install Playwright to run
+events, over HTTP and HTTPS, against a dry-run Mac: once as an iPhone
+(`e2e.test.js`) and once as a Pixel (`android.test.js`), where typing goes
+through the same IME commands Gboard uses. Install Playwright to run
 them: `npm i -D playwright && npx playwright install chromium`.
 
 ## Good to know
@@ -219,6 +254,8 @@ them: `npm i -D playwright && npx playwright install chromium`.
 - **Haptics on iPhone:** iOS 26.5 stopped web pages from triggering haptics,
   so iPhones get none. Android phones vibrate. Real haptics need a native
   iPhone app.
+- **Haptics on Android** are the motor's short pulses (5–22 ms). Some phones
+  with a weak motor barely feel the shortest ticks.
 - **Pinch to zoom** sends ⌘+ / ⌘−. A real trackpad's magnify gesture can't be
   created with public macOS APIs.
 - **Meeting mute buttons** send each app's own shortcut. Rackpad can't read

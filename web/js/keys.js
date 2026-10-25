@@ -1,6 +1,12 @@
 // Live typing and dictation. Whatever is in the text field is mirrored onto
 // the Mac keystroke by keystroke, including autocorrect and dictation going
 // back to fix earlier words.
+//
+// Android keyboards (Gboard, Samsung) type every word as a composition, the
+// underlined word, and only commit it at the space. So on Android the word is
+// mirrored while it's being composed too, or it would reach the Mac a word at
+// a time. They also report most keys as "Unidentified", so Return and
+// Backspace on an empty field are caught as edits (beforeinput) as well.
 
 import { diffText, graphemes } from './textdiff.js';
 import { onTap } from './touch.js';
@@ -10,7 +16,7 @@ import { onTap } from './touch.js';
 const NAV_KEYS = new Set(['return', 'tab', 'esc', 'left', 'right', 'up', 'down']);
 
 export class Keys {
-  constructor({ root, send, feel, live = true, onLiveChange = () => {} }) {
+  constructor({ root, send, feel, live = true, liveComposition = false, onLiveChange = () => {} }) {
     this.root = root;
     this.send = send;
     this.feel = feel;
@@ -20,6 +26,7 @@ export class Keys {
     this.clearBtn = root.querySelector('#type-clear');
     this.sent = '';
     this.composing = false;
+    this.liveComposition = liveComposition;
     this.mods = new Set();
     this.onLiveChange = onLiveChange;
     this.setLive(live);
@@ -31,10 +38,11 @@ export class Keys {
       this.sync();
     });
     f.addEventListener('input', () => {
-      if (!this.composing) this.sync();
+      if (!this.composing || this.liveComposition) this.sync();
       this.tidy();
     });
     f.addEventListener('keydown', (e) => this.onKeyDown(e));
+    f.addEventListener('beforeinput', (e) => this.onBeforeInput(e));
 
     onTap(this.liveBtn, () => {
       this.setLive(!this.live);
@@ -98,14 +106,30 @@ export class Keys {
     if (e.isComposing) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (!this.live) return this.submit();
-      this.sync();
-      this.pressKey('return');
+      this.enter();
     } else if (e.key === 'Backspace' && this.field.value === '') {
       // Nothing left in the field to delete, so delete on the Mac directly.
       e.preventDefault();
       this.send({ t: 'key', k: 'backspace' });
     }
+  }
+
+  // The same two keys from keyboards that don't say which key it was. A
+  // keydown handled above cancels these, so nothing is sent twice.
+  onBeforeInput(e) {
+    if (e.inputType === 'insertLineBreak' || e.inputType === 'insertParagraph') {
+      e.preventDefault();
+      this.enter();
+    } else if (e.inputType === 'deleteContentBackward' && this.field.value === '') {
+      e.preventDefault();
+      this.send({ t: 'key', k: 'backspace' });
+    }
+  }
+
+  enter() {
+    if (!this.live) return this.submit();
+    this.sync();
+    this.pressKey('return');
   }
 
   pressKey(k) {

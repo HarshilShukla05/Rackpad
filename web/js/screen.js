@@ -51,7 +51,7 @@ export class ScreenView {
     this.video.classList.remove('playing');
     if (on) {
       this.say('Connecting to the screen…', true);
-      this.timer = setTimeout(() => this.fail(this.stream ? `No picture after ${this.connectMs / 1000} seconds.` : "The WebRTC link to your Mac isn't up."), this.connectMs);
+      this.timer = setTimeout(() => this.fail(this.whyNoPicture()), this.connectMs);
       this.play();
     } else {
       this.video.srcObject = null;
@@ -69,6 +69,14 @@ export class ScreenView {
     if (!this.stream) return;
     this.video.srcObject = this.stream;
     this.video.play().catch(() => {});
+  }
+
+  whyNoPicture() {
+    if (!this.stream) return "The WebRTC link to your Mac isn't up.";
+    // Some Android phones' browsers have no H.264 decoder for WebRTC.
+    const codecs = globalThis.RTCRtpReceiver?.getCapabilities?.('video')?.codecs;
+    if (codecs && !codecs.some((c) => /h264/i.test(c.mimeType))) return "This browser can't play H.264 over WebRTC, which is how your Mac sends its screen. Try Chrome.";
+    return `No picture after ${this.connectMs / 1000} seconds.`;
   }
 
   // The picture is up.

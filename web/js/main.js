@@ -47,7 +47,11 @@ const DEFAULTS = {
   liveTyping: true,
   view: 'pad',
   sideways: false, // turned the phone sideways at least once, so the tip can go
+  fullscreen: true, // Android: hide Chrome's bars and the system's at the first touch
 };
+const UA = navigator.userAgent;
+const IOS = /iPhone|iPad|iPod/.test(UA);
+const ANDROID = /Android/.test(UA);
 const settings = loadSettings();
 const saveSettings = () => store.set('settings', settings);
 
@@ -69,6 +73,18 @@ function loadSettings() {
 hydrateIcons();
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());
+// A long press on Android opens a menu (save image, open in new tab); only
+// the text field gets one.
+document.addEventListener('contextmenu', (e) => {
+  if (!e.target.closest?.('textarea, input')) e.preventDefault();
+});
+// On a secure page Chrome on Android can install Rackpad in one tap. Kept
+// from the start, since Chrome offers it soon after the page loads.
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault(); // our sheet asks instead of Chrome's banner
+  installPrompt = e;
+});
 
 // ── Pairing token ───────────────────────────────────────────────────────
 // The token rides in the URL so "Add to Home Screen" keeps it: home-screen
@@ -117,24 +133,34 @@ function bindScanner() {
   });
 }
 
-function deviceName() {
-  const ua = navigator.userAgent;
-  if (/iPhone/.test(ua)) return 'iPhone';
-  if (/iPad/.test(ua)) return 'iPad';
-  if (/Android/.test(ua)) return 'Android phone';
-  return 'Browser';
+// What the Mac calls this phone. Chrome on Android no longer puts the model
+// in its User-Agent, but tells a secure page when asked ("Pixel 8").
+async function deviceName() {
+  if (/iPhone/.test(UA)) return 'iPhone';
+  if (/iPad/.test(UA)) return 'iPad';
+  if (!ANDROID) return 'Browser';
+  try {
+    const asked = navigator.userAgentData?.getHighEntropyValues(['model']);
+    const late = new Promise((resolve) => setTimeout(resolve, 300, null));
+    const model = (await Promise.race([asked, late]))?.model?.trim();
+    if (model) return model;
+  } catch {
+    // Not offered: plain HTTP, or another browser.
+  }
+  return 'Android phone';
 }
 
-function start() {
-  const conn = new Connection({ token, name: deviceName() });
+async function start() {
+  const conn = new Connection({ token, name: await deviceName() });
   const send = (msg) => conn.send(msg);
   // Any touch anywhere wakes the link up (see connection.js).
   document.addEventListener('touchstart', () => conn.use(), { capture: true, passive: true });
   const glow = new TouchGlow($('#glow'));
   const app = $('#app');
   const presence = $('#presence');
-  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
-  const installed = navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+  // From the Home Screen: iOS says so; Android opens it standalone or, when
+  // installed from the secure page, full screen.
+  const installed = navigator.standalone || ['standalone', 'fullscreen', 'minimal-ui'].some((m) => window.matchMedia(`(display-mode: ${m})`).matches);
   let lastPoint = { x: 0, y: 0 };
   let backendStatus = null;
   let version = null;
@@ -191,6 +217,7 @@ function start() {
     send,
     feel,
     live: settings.liveTyping,
+    liveComposition: ANDROID,
     onLiveChange: (on) => {
       settings.liveTyping = on;
       saveSettings();
@@ -318,6 +345,8 @@ function start() {
     glow.setColor(accent.color, surface.light);
     glow.enabled = settings.glow;
     setHapticsEnabled(settings.haptics);
+    $('#fullscreen-row').hidden = !canFullscreen;
+    if (!settings.fullscreen && document.fullscreenElement) document.exitFullscreen().catch(() => {});
     app.dataset.strip = settings.strip;
     for (const b of document.querySelectorAll('[data-pick]')) b.setAttribute('aria-pressed', String(settings[b.dataset.pick] === b.dataset.value));
     send(macSettings());
@@ -360,6 +389,7 @@ function start() {
     ['#s-beacon', 'beacon'],
     ['#s-ripples', 'ripples'],
     ['#s-haptics', 'haptics'],
+    ['#s-fullscreen', 'fullscreen'],
   ];
   for (const [sel, key] of toggles) {
     const el = $(sel);
@@ -391,8 +421,62 @@ function start() {
   $('#install-done').addEventListener('click', () => {
     store.set('installTipShown', true);
     closeSheets();
+    installPrompt?.prompt().catch(() => {});
+    installPrompt = null;
   });
   backdrop.addEventListener('click', closeSheets);
+
+  // ── Android: full screen, and the back gesture ────────────────────────
+  // Chrome on Android can hide its bars and the system's (an iPhone can't),
+  // but only when asked from a touch, so the first touch asks. And Android's
+  // back gesture is a swipe in from either edge, right where a thumb lands on
+  // the trackpad: a step in history catches it, so back closes what's open
+  // instead of leaving Rackpad. Both need a lifted finger (a user activation),
+  // hence touchend; Chrome skips history steps added without one.
+  const canFullscreen = ANDROID && document.fullscreenEnabled === true;
+  let guarded = false;
+  document.addEventListener('touchend', () => {
+    if (canFullscreen && settings.fullscreen && !document.fullscreenElement) {
+      document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+    }
+    if (ANDROID && !guarded) {
+      history.pushState({ rackpad: 'back' }, '');
+      guarded = true;
+    }
+  }, { capture: true, passive: true });
+
+  window.addEventListener('popstate', () => {
+    if (!ANDROID || !guarded) return;
+    guarded = false; // the next touch catches the next back
+    if (!stepBack()) toast('Swipe back again to leave');
+  });
+
+  // Back closes a sheet, puts the keyboard away, or returns to the trackpad.
+  function stepBack() {
+    if (Object.values(sheets).some((el) => !el.hidden)) {
+      closeSheets();
+      return true;
+    }
+    if (typing) {
+      setTyping(false);
+      render('pad');
+      return true;
+    }
+    if (!magic && view !== 'pad') {
+      showView('pad');
+      return true;
+    }
+    return false;
+  }
+
+  let toastTimer = null;
+  function toast(text) {
+    const el = $('#toast');
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (el.hidden = true), 2200);
+  }
 
   // ── Secure connection ─────────────────────────────────────────────────
   // The Mac serves the same app over HTTPS with its own certificate (see
@@ -428,11 +512,16 @@ function start() {
   }
 
   function openSecureSheet() {
-    const android = /Android/.test(navigator.userAgent);
-    for (const li of document.querySelectorAll('#secure-steps [data-os]')) li.hidden = li.dataset.os !== (android ? 'android' : 'ios');
+    for (const li of document.querySelectorAll('#secure-steps [data-os]')) li.hidden = li.dataset.os !== (ANDROID ? 'android' : 'ios');
     for (const el of document.querySelectorAll('.ca-name')) el.textContent = secureInfo?.ca ?? 'Rackpad Local CA';
-    // A Home Screen app may not hand the certificate to Settings; Safari does.
-    if (installed) $('#secure-dl-note').textContent = `If nothing downloads, open ${location.origin}/rackpad.crt in Safari.`;
+    if (ANDROID) {
+      // Android installs a certificate from Settings, not from the download.
+      $('#secure-dl-note').textContent = 'Chrome saves it to Downloads.';
+      $('#secure-note').textContent = "Then install the secure Rackpad from Chrome's ⋮ menu, and delete the old icon.";
+    } else if (installed) {
+      // A Home Screen app may not hand the certificate to Settings; Safari does.
+      $('#secure-dl-note').textContent = `If nothing downloads, open ${location.origin}/rackpad.crt in Safari.`;
+    }
     $('#secure-lead').textContent = secureNow
       ? 'This phone is connected securely, so the microphone and live camera can work.'
       : secureInfo
@@ -503,7 +592,7 @@ function start() {
       level = 'bad';
     }
     if (level === 'ok') {
-      if (ios && !installed) note = 'Add to Home Screen for full screen';
+      if (IOS && !installed) note = 'Add to Home Screen for full screen';
       else if (!settings.sideways) note = 'Turn sideways for a bigger trackpad';
     }
     healthy = level === 'ok';
@@ -576,9 +665,16 @@ function start() {
     $('#app-tab').setAttribute('aria-label', `${frontApp?.name || profile.title} controls`);
   }
 
-  // In Safari the browser bars eat the trackpad; on the Home Screen it's all glass.
+  // In the browser its bars eat the trackpad; on the Home Screen it's all glass.
   function maybeShowInstallTip() {
-    if (ios && !installed && !store.get('installTipShown', false)) setTimeout(() => !magic && openSheet('install'), 900);
+    if (!(IOS || ANDROID) || installed || store.get('installTipShown', false)) return;
+    setTimeout(() => {
+      if (magic) return;
+      const os = IOS ? 'ios' : installPrompt ? 'android-install' : 'android';
+      for (const p of document.querySelectorAll('#install [data-os]')) p.hidden = p.dataset.os !== os;
+      $('#install-done').textContent = installPrompt ? 'Install' : 'Got it';
+      openSheet('install');
+    }, 900);
   }
 
   applyAll();
