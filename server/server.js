@@ -157,7 +157,11 @@ export function createRackpadServer({ backend, token, macName, version, pairing,
       if (p === '/pair') {
         const qr = await QRCode.toString(pairing.primary, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' });
         const secureQr = pairing.secure && securePort ? await QRCode.toString(pairing.secure, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' }) : null;
-        return send(res, 200, MIME['.html'], renderPairPage({ qr, secureQr, pairing, macName, version, dryRun: backend.status.kind === 'dry-run' }));
+        // Android 11 and older (or any phone on a VPN) can't look up .local
+        // names, so they get the Mac's address as a code of its own.
+        const ipLink = /\.local:/.test(pairing.primary) ? pairing.fallbacks.find((u) => /^http:\/\/\d+\.\d+\.\d+\.\d+:/.test(u)) : null;
+        const ipQr = ipLink ? await QRCode.toString(ipLink, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' }) : null;
+        return send(res, 200, MIME['.html'], renderPairPage({ qr, secureQr, ipQr, pairing, macName, version, dryRun: backend.status.kind === 'dry-run' }));
       }
       if (p === '/api/status') {
         return sendJson(res, {
@@ -350,6 +354,8 @@ export function createRackpadServer({ backend, token, macName, version, pairing,
 export function platformOf(ua = '') {
   const ios = /OS (\d+)[_.](\d+)[_\d]* like Mac OS X/.exec(ua);
   if (ios) return `, iOS ${ios[1]}.${ios[2]}`;
+  // Chrome now says "Android 10; K" whatever the phone runs, so that one means just Android.
+  if (/Android 10; K\)/.test(ua)) return ', Android';
   const android = /Android (\d+(?:\.\d+)?)/.exec(ua);
   return android ? `, Android ${android[1]}` : '';
 }

@@ -13,13 +13,22 @@ const SIM_APPS = [
   ['com.colliderli.iina', 'IINA', 'movie.mkv'],
 ];
 
-export function renderPairPage({ qr, secureQr = null, pairing, macName, version, dryRun }) {
+export function renderPairPage({ qr, secureQr = null, ipQr = null, pairing, macName, version, dryRun }) {
+  const byAddress = ipQr
+    ? `<section class="card secure" id="by-address">
+        <h2>Android: link won't open?</h2>
+        <div class="secure-row">
+          <div class="qr small" aria-label="Pairing QR code with this Mac's address">${ipQr}</div>
+          <p>Phones on Android 11 or older, or with a VPN on, can't find a <code>.local</code> name. Scan this code instead: it has this Mac's address in it. If the Mac's address changes (a new network), scan it again.</p>
+        </div>
+      </section>`
+    : '';
   const secure = secureQr
     ? `<section class="card secure">
         <h2>Secure link 🔒</h2>
         <div class="secure-row">
           <div class="qr small" aria-label="Secure pairing QR code">${secureQr}</div>
-          <p>For the mic and live camera. Scan this once the phone trusts Rackpad's certificate: in Rackpad on the phone, open <b>Settings → Secure connection</b> and follow the three steps. Then add this secure Rackpad to the Home Screen.</p>
+          <p>For the mic and live camera. Scan this once the phone trusts Rackpad's certificate: in Rackpad on the phone, open <b>Settings → Secure connection</b> and follow the steps. Then add this secure Rackpad to the Home Screen.</p>
         </div>
       </section>`
     : '';
@@ -79,9 +88,9 @@ export function renderPairPage({ qr, secureQr = null, pairing, macName, version,
     <section class="card">
       <h2>On your phone</h2>
       <ol>
-        <li>Open the Camera and point it at the code.</li>
-        <li>Tap the link. Rackpad opens in Safari.</li>
-        <li>Tap <b>Share</b> → <b>Add to Home Screen</b>. From then on the icon connects by itself, on any network where your phone and Mac are together.</li>
+        <li>Open the Camera (or Google Lens) and point it at the code.</li>
+        <li>Tap the link. Rackpad opens in Safari on an iPhone, Chrome on Android.</li>
+        <li>iPhone: tap <b>Share</b> → <b>Add to Home Screen</b>. Android: tap <b>⋮</b> → <b>Add to Home screen</b>. From then on the icon connects by itself, on any network where your phone and Mac are together.</li>
       </ol>
       <p class="muted" style="margin:12px 0 0">Rackpad already on your Home Screen? Open it and tap <b>Scan QR code</b>.</p>
     </section>
@@ -97,6 +106,7 @@ export function renderPairPage({ qr, secureQr = null, pairing, macName, version,
       <span class="url">${esc(pairing.primary)}</span>
       ${pairing.fallbacks.length ? `<p class="muted" style="margin:10px 0 0">If that doesn't load (some office networks block <code>.local</code> names):</p>${pairing.fallbacks.map((u) => `<span class="url">${esc(u)}</span>`).join('')}` : ''}
     </section>
+    ${byAddress}
     ${secure}
     ${sim}
   </div>

@@ -128,6 +128,7 @@
     <label class="row sw"><span>Cursor glow on Mac</span><input type="checkbox" switch id="s-beacon"></label>
     <label class="row sw"><span>Click ripples on Mac</span><input type="checkbox" switch id="s-ripples"></label>
     <label class="row sw"><span>Haptics</span><input type="checkbox" switch id="s-haptics"></label>
+    <label class="row sw" id="fullscreen-row" hidden><span>Full screen</span><input type="checkbox" switch id="s-fullscreen"></label>
   </div>
   <div class="group">
     <button class="row link" id="open-secure"><span>Secure connection</span><span class="row-value"><span id="secure-state">Off</span><i data-icon="chevron-right"></i></span></button>
@@ -157,7 +158,7 @@
     <li><div><b>Download Rackpad's certificate</b><small id="secure-dl-note">Safari asks to allow a configuration profile: tap Allow.</small></div><a class="pill" id="secure-download" href="/rackpad.crt">Download</a></li>
     <li data-os="ios"><div><b>Install it</b><small>Settings → General → VPN &amp; Device Management → <span class="ca-name">Rackpad Local CA</span> → Install</small></div></li>
     <li data-os="ios"><div><b>Trust it</b><small>Settings → General → About → Certificate Trust Settings → switch on <span class="ca-name">Rackpad Local CA</span></small></div></li>
-    <li data-os="android" hidden><div><b>Install it</b><small>Settings → Security → More security settings → Encryption &amp; credentials → Install a certificate → CA certificate → pick Rackpad.crt</small></div></li>
+    <li data-os="android" hidden><div><b>Install it</b><small>Settings → search for <b>CA certificate</b> → CA certificate → Install anyway → pick Rackpad.crt from Downloads. (It lives under Security → Encryption &amp; credentials → Install a certificate; on Samsung, Security and privacy → More security settings → Install from device storage.)</small></div></li>
   </ol>
   <button class="cta" id="secure-open" disabled>Checking…</button>
   <p class="about" id="secure-note">Then add the secure Rackpad to your Home Screen, and delete the old icon.</p>
@@ -166,9 +167,13 @@
 <section class="sheet" id="install" hidden aria-label="Add to Home Screen">
   <img class="install-art" src="/icons/apple-touch-icon.png" alt="" width="64" height="64">
   <h2>Make it full screen</h2>
-  <p>Tap <span class="inline-ic" data-icon="share"></span> <b>Share</b>, then <b>Add to Home Screen</b>. Rackpad then opens from its own icon with no browser bars, and finds your Mac by itself.</p>
+  <p data-os="ios">Tap <span class="inline-ic" data-icon="share"></span> <b>Share</b>, then <b>Add to Home Screen</b>. Rackpad then opens from its own icon with no browser bars, and finds your Mac by itself.</p>
+  <p data-os="android" hidden>Tap <span class="inline-ic" data-icon="menu"></span> in Chrome, then <b>Add to Home screen</b>, and Rackpad opens from its own icon and finds your Mac by itself. Your first touch hides Chrome's bars.</p>
+  <p data-os="android-install" hidden>Install Rackpad and it opens from its own icon, full screen with no browser bars, and finds your Mac by itself.</p>
   <button class="cta" id="install-done">Got it</button>
 </section>
+
+<div class="toast" id="toast" role="status" hidden></div>
 
 <div class="pairing" id="pairing" hidden>
   <img src="/icons/apple-touch-icon.png" alt="" width="72" height="72">
